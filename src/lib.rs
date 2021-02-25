@@ -1,5 +1,7 @@
+use itertools::Itertools;
 use ndarray::prelude::*;
 use ndarray::{Array, Array2};
+use rand::prelude::SliceRandom;
 
 fn diff_row(series: &Vec<f64>, value: f64) -> Vec<f64> {
     series.iter().map(|s| (*s - value).abs()).collect()
@@ -119,10 +121,14 @@ fn qhat_values(diff_matrix: &ArrayView2<f64>) -> Vec<f64> {
 #[test]
 fn test_series() {
     let series = vec![1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-    let diff_matrix = calc_diff_matrix(&series);
-    let q_values = qhat_values(&diff_matrix.view());
+    let q_values = get_qhat_values(&series);
 
     assert_eq!(q_values, vec!(0.0, 0.0));
+}
+
+fn get_qhat_values(series: &Vec<f64>) -> Vec<f64> {
+    let diff_matrix = calc_diff_matrix(series);
+    qhat_values(&diff_matrix.view())
 }
 
 fn maximum(list: &Vec<f64>) -> (usize, f64) {
@@ -154,10 +160,14 @@ fn test_argmax() {
     assert_eq!(argmax(&list), 2);
 }
 
-fn get_best_change_point(diff_matrix: &ArrayView2<f64>) -> usize {
+fn get_best_change_point(
+    diff_matrix: &ArrayView2<f64>,
+    known_change_points: &Vec<usize>,
+) -> (usize, f64) {
+    let series_len = diff_matrix.nrows();
     let mut change_points: Vec<(usize, f64)> = vec![];
 
-    let boundaries: Vec<usize> = vec![0, diff_matrix.nrows()];
+    let boundaries: Vec<usize> = get_windows(known_change_points, series_len);
     for bounds in boundaries.windows(2) {
         let a = bounds[0];
         let b = bounds[1];
@@ -169,15 +179,84 @@ fn get_best_change_point(diff_matrix: &ArrayView2<f64>) -> usize {
 
     let max_cp = argmax(&change_points.iter().map(|(_, val)| *val).collect());
 
-    change_points[max_cp].0
+    change_points[max_cp]
+}
+
+fn get_windows(change_points: &Vec<usize>, series_len: usize) -> Vec<usize> {
+    let mut boundaries: Vec<usize> = vec![0];
+    boundaries.extend(change_points.iter().sorted());
+    if boundaries.last().unwrap() != &series_len {
+        boundaries.push(series_len);
+    }
+
+    boundaries
+}
+
+#[test]
+fn test_get_windows() {
+    let change_points: Vec<usize> = vec![];
+    assert_eq!(get_windows(&change_points, 1), vec!(0, 1));
+
+    let change_points: Vec<usize> = vec![3, 6, 9];
+    assert_eq!(get_windows(&change_points, 12), vec!(0, 3, 6, 9, 12));
+
+    let change_points: Vec<usize> = vec![7, 2, 9];
+    assert_eq!(get_windows(&change_points, 15), vec!(0, 2, 7, 9, 15));
 }
 
 pub fn get_change_points(series: &Vec<f64>) -> Vec<usize> {
+    let pvalue = 0.05;
+    let permutations = 100;
     let diff_matrix = calc_diff_matrix(series);
-    let mut changes_points: Vec<usize> = vec![];
+    let mut change_points: Vec<usize> = vec![];
 
-    let best_candidate = get_best_change_point(&diff_matrix.view());
-    changes_points.push(best_candidate);
+    let mut best_candidate = get_best_change_point(&diff_matrix.view(), &change_points);
+    let mut windows = get_windows(&change_points, series.len());
+    while is_significant(best_candidate.1, series, permutations, pvalue, &windows) {
+        if change_points.contains(&best_candidate.0) {
+            break;
+        }
+        change_points.push(best_candidate.0);
+        windows = get_windows(&change_points, series.len());
+        best_candidate = get_best_change_point(&diff_matrix.view(), &change_points);
+    }
 
-    changes_points
+    change_points
+}
+
+fn permutation_test(series: &Vec<f64>, windows: &Vec<usize>) -> f64 {
+    let mut rng = rand::thread_rng();
+    let mut permuted_qhat_values: Vec<f64> = vec![];
+
+    for bounds in windows.windows(2) {
+        let a = bounds[0];
+        let b = bounds[1];
+
+        let mut window: Vec<f64> = vec![0.; b - a];
+        window.copy_from_slice(&series[a..b]);
+        window.shuffle(&mut rng);
+
+        let q_list = get_qhat_values(&window);
+        let (_, max_qhat) = maximum(&q_list);
+        permuted_qhat_values.push(max_qhat);
+    }
+
+    let (_, max_value) = maximum(&permuted_qhat_values);
+    max_value
+}
+
+fn is_significant(
+    candidate: f64,
+    series: &Vec<f64>,
+    permutations: usize,
+    pvalue: f64,
+    windows: &Vec<usize>,
+) -> bool {
+    let permutes_with_higher = (0..permutations)
+        .map(|_| permutation_test(series, windows))
+        .filter(|v| v > &candidate)
+        .count();
+    let probability = permutes_with_higher as f64 / (permutations + 1) as f64;
+
+    probability <= pvalue
 }
