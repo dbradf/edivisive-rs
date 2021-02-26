@@ -1,4 +1,4 @@
-use edivisive::get_change_points;
+use edivisive::EDivisive;
 
 fn main() {
     // let a: Vec<f64> = (0..1000).map(|d| d as f64).collect();
@@ -1014,7 +1014,8 @@ fn main() {
         9.068914247349532,
         7.3052201796750875,
     ];
-    let change_points = get_change_points(&series);
+    let e_divisive = EDivisive::default();
+    let change_points = e_divisive.get_change_points(&series);
 
     // println!("Series: {:?}", series);
     println!("Change Points: {:?}", change_points);
