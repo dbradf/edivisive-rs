@@ -67,15 +67,15 @@ pub fn get_qhat_values(series: &Vec<f64>) -> Vec<f64> {
     qhat_values(&diff_matrix.view())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    #[test]
-    fn test_series() {
-        let series = vec![1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let q_values = get_qhat_values(&series);
+//     #[test]
+//     fn test_series() {
+//         let series = vec![1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+//         let q_values = get_qhat_values(&series);
 
-        assert_eq!(q_values, vec!(0.0, 0.0));
-    }
-}
+//         assert_eq!(q_values, vec!(0.0, 0.0));
+//     }
+// }

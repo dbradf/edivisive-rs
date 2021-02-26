@@ -8,7 +8,7 @@ use qhat::{get_qhat_values, qhat_values};
 use rand::prelude::SliceRandom;
 use util::{argmax, get_windows, maximum};
 
-const DEFAULT_PVALUE: f64 = 0.05;
+const DEFAULT_PVALUE: f64 = 0.01;
 const DEFAULT_PERMUTATIONS: usize = 100;
 
 pub struct EDivisive {
@@ -16,7 +16,7 @@ pub struct EDivisive {
     n_permutations: usize,
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 struct ChangePoint {
     index: usize,
     qhat: f64,
@@ -87,6 +87,9 @@ impl EDivisive {
         series: &Vec<f64>,
         windows: &Vec<usize>,
     ) -> bool {
+        if candidate.qhat < 1e-9 {
+            return false;
+        }
         let permutes_with_higher = (0..self.n_permutations)
             .map(|_| permutation_test(series, windows))
             .filter(|v| v > &candidate.qhat)
